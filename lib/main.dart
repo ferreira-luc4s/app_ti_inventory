@@ -15,20 +15,20 @@ class InventoryApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'TI Inventory',
       theme: ThemeData(
-        // 1. Define que o tema base é escuro
+
         brightness: Brightness.dark,
         
-        // 2. Define a cor de fundo principal (Scaffold) como preto total
+
         scaffoldBackgroundColor: Colors.black,
         
-        // 3. Ajusta o esquema de cores para combinar com o fundo preto
+
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
-          brightness: Brightness.dark, // Importante para os botões e textos
-          surface: Colors.grey[900],   // Cor de superfícies como Cards e Menus
+          brightness: Brightness.dark, 
+          surface: Colors.grey[900],   
         ),
         
-        // 4. Garante que as AppBars também acompanhem o visual
+
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
@@ -151,14 +151,14 @@ class HomePage extends StatelessWidget {
               leading: const Icon(Icons.chat_outlined, color: Colors.blue),
               title: const Text('Chat de Atendimento'),
               onTap: () {
-                Navigator.pop(context); // Fecha o menu lateral
+                Navigator.pop(context); 
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const ChatPage()),
                 );
               },
             ),
-            const Divider(), // Linha divisória
+            const Divider(), 
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('Sair', style: TextStyle(color: Colors.red)),
@@ -192,8 +192,7 @@ body: ListView.builder(
                   MaterialPageRoute(
                     builder: (context) => ItemDetailsPage(
                       nome: item['nome']!,
-                      // Como a lista 'itens' acima é estática, passamos null na imagem.
-                      // Quando implementarmos o salvamento real, passaremos o File da foto aqui.
+
                       imagem: null, 
                     ),
                   ),
@@ -367,7 +366,6 @@ class ItemDetailsPage extends StatelessWidget {
       appBar: AppBar(title: Text(nome)),
       body: Column(
         children: [
-          // Exibição da Imagem (ou ícone padrão se não houver foto)
           Container(
             height: 300,
             width: double.infinity,
@@ -389,13 +387,11 @@ class ItemDetailsPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 const SizedBox(height: 40),
                 
-                // BOTÕES DE AÇÃO
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          // Ação de Editar (futuro)
                         },
                         icon: const Icon(Icons.edit),
                         label: const Text('Editar'),
@@ -406,7 +402,6 @@ class ItemDetailsPage extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          // Ação de Excluir (futuro)
                         },
                         icon: const Icon(Icons.delete),
                         label: const Text('Excluir'),
