@@ -1,8 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'database_helper.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+
+  if (Platform.isWindows || Platform.isLinux) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   runApp(const InventoryApp());
 }
 
@@ -42,8 +50,16 @@ class InventoryApp extends StatelessWidget {
 }
 
 // --- TELA DE LOGIN ---
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget { 
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _userController = TextEditingController();
+  final _passController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -65,35 +81,32 @@ class LoginPage extends StatelessWidget {
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 40),
-            const TextField(
-              decoration: InputDecoration(
-                labelText: 'Usuário',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
-              ),
+TextField(
+              controller: _userController, 
+              decoration: const InputDecoration(labelText: 'Usuário', prefixIcon: Icon(Icons.person)),
             ),
             const SizedBox(height: 16),
-            const TextField(
+            TextField(
+              controller: _passController, 
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Senha',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
-              ),
+              decoration: const InputDecoration(labelText: 'Senha', prefixIcon: Icon(Icons.lock)),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () {
+            onPressed: () {
+              if (_userController.text == "admin" && _passController.text == "123") {
+                if (!mounted) return; 
+                
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => const HomePage()),
                 );
-              },
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Usuário ou senha incorretos!')),
+                );
+              }
+            },
               child: const Text('Entrar'),
             ),
           ],
@@ -104,23 +117,38 @@ class LoginPage extends StatelessWidget {
 }
 
 // --- TELA INICIAL ---
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, String>> itens = [
-      {'nome': 'Notebook Dell G15'},
-      {'nome': 'Monitor Samsung 24"'},
-    ];
+  State<HomePage> createState() => _HomePageState();
+}
 
+class _HomePageState extends State<HomePage> {
+  List<Map<String, dynamic>> _itens = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _atualizarLista();
+  }
+
+  void _atualizarLista() async {
+    final dados = await DatabaseHelper.getItems();
+    setState(() {
+      _itens = dados;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meu Inventário'),
+        title: const Text('Meu Inventário'), 
         centerTitle: true,
       ),
       
-      // --- MENU HAMBÚRGUER  ---
+      // --- INÍCIO DO MENU HAMBÚRGUER ---
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -136,14 +164,16 @@ class HomePage extends StatelessWidget {
                       width: 70,
                       height: 70,
                       padding: const EdgeInsets.all(5),
+                      color: Colors.blue, 
                       child: Image.asset(
-                        'assets/logo.png',
+                        'assets/logo.png', 
                         fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 50),
                       ),
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text('MENU', style: TextStyle(color: Colors.white, fontSize: 18)),
+                  const Text('TI INVENTORY', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -173,41 +203,40 @@ class HomePage extends StatelessWidget {
         ),
       ),
 
-body: ListView.builder(
-        itemCount: itens.length,
+      body: ListView.builder(
+        itemCount: _itens.length,
         itemBuilder: (context, index) {
-          final item = itens[index];
+          final item = _itens[index];
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
               leading: const Icon(Icons.devices, color: Colors.blue),
-              title: Text(item['nome']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('Toque para ver detalhes'),
+              title: Text(item['nome'], style: const TextStyle(fontWeight: FontWeight.bold)),
               trailing: const Icon(Icons.chevron_right),
-              
-              // --- AÇÃO PARA ABRIR A TELA DE DETALHES ---
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => ItemDetailsPage(
-                      nome: item['nome']!,
-
-                      imagem: null, 
+                      id: item['id'],
+                      nome: item['nome'],
+                      imagemPath: item['imagem_path'],
                     ),
                   ),
                 );
+                _atualizarLista();
               },
             ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const AddEntryPage()),
           );
+          _atualizarLista();
         },
         child: const Icon(Icons.add),
       ),
@@ -215,7 +244,7 @@ body: ListView.builder(
   }
 }
 
-// --- TERCEIRA TELA: CHAT DE ATENDIMENTO ---
+// --- TELA CHAT DE ATENDIMENTO ---
 class ChatPage extends StatelessWidget {
   const ChatPage({super.key});
 
@@ -275,15 +304,45 @@ class _AddEntryPageState extends State<AddEntryPage> {
   final TextEditingController _nomeController = TextEditingController();
   File? _imagemSelecionada;
 
-  Future<void> _tirarFoto() async {
+  Future<void> _pegarImagem(ImageSource source) async {
     final picker = ImagePicker();
-    final XFile? foto = await picker.pickImage(source: ImageSource.camera);
+    final XFile? foto = await picker.pickImage(source: source);
 
     if (foto != null) {
       setState(() {
         _imagemSelecionada = File(foto.path);
       });
     }
+  }
+
+  void _mostrarOpcoesFoto() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.blue),
+                title: const Text('Escolher da Galeria'),
+                onTap: () {
+                  Navigator.pop(context); 
+                  _pegarImagem(ImageSource.gallery); 
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                title: const Text('Tirar Foto Agora'),
+                onTap: () {
+                  Navigator.pop(context); 
+                  _pegarImagem(ImageSource.camera); 
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -298,7 +357,8 @@ class _AddEntryPageState extends State<AddEntryPage> {
             const Text('Foto do Aparelho', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             GestureDetector(
-              onTap: _tirarFoto,
+              // 3. Agora o toque chama o MENU de opções
+              onTap: _mostrarOpcoesFoto, 
               child: Container(
                 height: 200,
                 decoration: BoxDecoration(
@@ -310,8 +370,8 @@ class _AddEntryPageState extends State<AddEntryPage> {
                     ? const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.camera_alt, size: 50, color: Colors.blue),
-                          Text('Toque para tirar foto'),
+                          Icon(Icons.image_search, size: 50, color: Colors.blue),
+                          Text('Toque para adicionar foto'),
                         ],
                       )
                     : ClipRRect(
@@ -330,14 +390,20 @@ class _AddEntryPageState extends State<AddEntryPage> {
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (_imagemSelecionada == null || _nomeController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Tire uma foto e dê um nome!')),
+                    const SnackBar(content: Text('Adicione uma foto e dê um nome!')),
                   );
                   return;
                 }
-                Navigator.pop(context);
+
+                await DatabaseHelper.insertItem(
+                  _nomeController.text, 
+                  _imagemSelecionada!.path 
+                );
+
+                if (mounted) Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromARGB(255, 11, 133, 0),
@@ -354,58 +420,80 @@ class _AddEntryPageState extends State<AddEntryPage> {
 }
 
 // --- TELA DE DETALHES DO EQUIPAMENTO ---
-class ItemDetailsPage extends StatelessWidget {
+class ItemDetailsPage extends StatefulWidget {
+  final int id;
   final String nome;
-  final File? imagem;
+  final String? imagemPath;
 
-  const ItemDetailsPage({super.key, required this.nome, this.imagem});
+  const ItemDetailsPage({super.key, required this.id, required this.nome, this.imagemPath});
+
+  @override
+  State<ItemDetailsPage> createState() => _ItemDetailsPageState();
+}
+
+class _ItemDetailsPageState extends State<ItemDetailsPage> {
+  late String nomeExibicao;
+  String? imagemExibicao; // Adicione esta linha
+
+  @override
+  void initState() {
+    super.initState();
+    nomeExibicao = widget.nome;
+    imagemExibicao = widget.imagemPath; // Inicia com a imagem que veio do banco
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(nome)),
+      appBar: AppBar(title: Text(nomeExibicao)),
       body: Column(
         children: [
           Container(
             height: 300,
             width: double.infinity,
-            color: Colors.grey[300],
-            child: imagem != null
-                ? Image.file(imagem!, fit: BoxFit.cover)
+            color: Colors.grey[900],
+            // No seu Container de imagem, altere para:
+            child: imagemExibicao != null
+                ? Image.file(File(imagemExibicao!), fit: BoxFit.cover)
                 : const Icon(Icons.devices, size: 100, color: Colors.grey),
           ),
-          
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  nome,
+                  nomeExibicao,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
                 const SizedBox(height: 40),
-                
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                        },
+                        onPressed: _abrirEditor, // Função para editar
                         icon: const Icon(Icons.edit),
                         label: const Text('Editar'),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color.fromARGB(255, 0, 0, 154), foregroundColor: const Color.fromARGB(255, 255, 255, 255)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color.fromARGB(255, 0, 0, 154),
+                          foregroundColor: Colors.white,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
+                          // CHAMADA DE EXCLUSÃO
+                          await DatabaseHelper.deleteItem(widget.id);
+                          if (mounted) Navigator.pop(context);
                         },
                         icon: const Icon(Icons.delete),
                         label: const Text('Excluir'),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color.fromARGB(255, 124, 0, 12), foregroundColor: const Color.fromARGB(255, 255, 255, 255)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color.fromARGB(255, 124, 0, 12),
+                          foregroundColor: Colors.white,
+                        ),
                       ),
                     ),
                   ],
@@ -417,4 +505,60 @@ class ItemDetailsPage extends StatelessWidget {
       ),
     );
   }
-}
+
+  void _abrirEditor() {
+      final controller = TextEditingController(text: nomeExibicao);
+      String? novoCaminhoImagem = imagemExibicao; // Variável temporária para o modal
+
+      showDialog(
+        context: context,
+        builder: (context) => StatefulBuilder( // StatefulBuilder permite atualizar o modal
+          builder: (context, setModalState) => AlertDialog(
+            title: const Text('Editar Equipamento'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(labelText: 'Novo Nome'),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final ImagePicker picker = ImagePicker();
+                    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                    if (image != null) {
+                      setModalState(() {
+                        novoCaminhoImagem = image.path;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Trocar Foto'),
+                ),
+                if (novoCaminhoImagem != null)
+                  const Text("Nova foto selecionada", style: TextStyle(fontSize: 12, color: Colors.green)),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+              TextButton(
+                onPressed: () async {
+                  // ATENÇÃO: Verifique se seu DatabaseHelper.updateItem aceita o 3º parâmetro (imagem)
+                  await DatabaseHelper.updateItem(widget.id, controller.text, novoCaminhoImagem);
+                  
+                  setState(() {
+                    nomeExibicao = controller.text;
+                    imagemExibicao = novoCaminhoImagem; // Atualiza a foto na tela principal
+                  });
+                  
+                  if (mounted) Navigator.pop(context);
+                },
+                child: const Text('Salvar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
