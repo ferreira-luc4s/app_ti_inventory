@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'database_helper.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
 
@@ -50,7 +53,7 @@ class InventoryApp extends StatelessWidget {
 }
 
 // --- TELA DE LOGIN ---
-class LoginPage extends StatefulWidget { 
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
@@ -60,56 +63,120 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _userController = TextEditingController();
   final _passController = TextEditingController();
+  bool _isLoading = false; // Controle de carregamento
+
+  // Função para realizar o login via API
+  Future<void> _login() async {
+    // Validação básica de campos vazios
+    if (_userController.text.isEmpty || _passController.text.isEmpty) {
+      _showSnackBar('Preencha todos os campos!');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Endpoint e dados baseados na imagem image_efb6a2.png
+      final url = Uri.parse('https://mobile-ios-login.zani0x03.eti.br/api/auth/login');
+      
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': _userController.text,
+          'password': _passController.text,
+          'sistemaId': 'd6d0ec99-099c-4523-999f-aba9edceb925', 
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final String token = data['access_token']; 
+        
+        // Log de sucesso (Opcional)
+        debugPrint('Login realizado com sucesso! Token: $token');
+
+        if (!mounted) return;
+
+        // Navegação para a Home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      } else {
+        _showSnackBar('Usuário ou senha incorretos!');
+      }
+    } catch (e) {
+      _showSnackBar('Erro ao conectar no servidor: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Image.asset(
-              'assets/logo.png', 
-              height: 120,       
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'TI Inventory',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 40),
-TextField(
-              controller: _userController, 
-              decoration: const InputDecoration(labelText: 'Usuário', prefixIcon: Icon(Icons.person)),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passController, 
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Senha', prefixIcon: Icon(Icons.lock)),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-            onPressed: () {
-              if (_userController.text == "admin" && _passController.text == "123") {
-                if (!mounted) return; 
-                
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomePage()),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Usuário ou senha incorretos!')),
-                );
-              }
-            },
-              child: const Text('Entrar'),
-            ),
-          ],
+        child: SingleChildScrollView( // Evita erro de layout com teclado aberto
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 80),
+              Image.asset(
+                'assets/logo.png',
+                height: 120,
+                errorBuilder: (context, error, stackTrace) => 
+                  const Icon(Icons.inventory, size: 120, color: Colors.blue),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'TI Inventory',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 40),
+              TextField(
+                controller: _userController,
+                decoration: const InputDecoration(
+                  labelText: 'Usuário',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Senha',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _login,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Entrar'),
+              ),
+            ],
+          ),
         ),
       ),
     );
