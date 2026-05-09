@@ -63,11 +63,10 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _userController = TextEditingController();
   final _passController = TextEditingController();
-  bool _isLoading = false; // Controle de carregamento
+  bool _isLoading = false; 
 
-  // Função para realizar o login via API
+  
   Future<void> _login() async {
-    // Validação básica de campos vazios
     if (_userController.text.isEmpty || _passController.text.isEmpty) {
       _showSnackBar('Preencha todos os campos!');
       return;
@@ -76,7 +75,6 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Endpoint e dados baseados na imagem image_efb6a2.png
       final url = Uri.parse('https://mobile-ios-login.zani0x03.eti.br/api/auth/login');
       
       final response = await http.post(
@@ -93,12 +91,10 @@ class _LoginPageState extends State<LoginPage> {
         final data = jsonDecode(response.body);
         final String token = data['access_token']; 
         
-        // Log de sucesso (Opcional)
         debugPrint('Login realizado com sucesso! Token: $token');
 
         if (!mounted) return;
 
-        // Navegação para a Home
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomePage()),
@@ -124,7 +120,7 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: SingleChildScrollView( // Evita erro de layout com teclado aberto
+        child: SingleChildScrollView( 
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
