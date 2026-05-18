@@ -97,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
+          MaterialPageRoute(builder: (context) => HomePage(token: token)),
         );
       } else {
         _showSnackBar('Usuário ou senha incorretos!');
@@ -181,7 +181,9 @@ class _LoginPageState extends State<LoginPage> {
 
 // --- TELA INICIAL ---
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String token; // Recebe o token do login
+
+  const HomePage({super.key, required this.token});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -247,8 +249,7 @@ class _HomePageState extends State<HomePage> {
                 Navigator.pop(context); 
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ChatPage()),
-                );
+                  MaterialPageRoute(builder: (context) => ChatPage(token: widget.token)),                );
               },
             ),
             const Divider(), 
@@ -307,9 +308,89 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// --- TELA CHAT DE ATENDIMENTO ---
-class ChatPage extends StatelessWidget {
-  const ChatPage({super.key});
+// --- TELA CHAT DE ATENDIMENTO (CONECTADA À API) ---
+class ChatPage extends StatefulWidget {
+  final String token; // Recebe o token necessário para a API
+
+  const ChatPage({super.key, required this.token});
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> {
+  final TextEditingController _msgController = TextEditingController();
+  final ScrollController _scrollController = ScrollController(); // Controlador para auto-scroll
+  final List<Map<String, String>> _mensagens = []; // Armazena o histórico do chat na tela
+  bool _enviando = false;
+
+  // Função para rolar a tela até a última mensagem
+  void _irParaOFinal() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _enviarMensagem() async {
+    final texto = _msgController.text.trim();
+    if (texto.isEmpty || _enviando) return;
+
+    // Adiciona a mensagem do usuário na tela imediatamente
+    setState(() {
+      _mensagens.add({'remetente': 'user', 'texto': texto});
+      _enviando = true;
+    });
+    _msgController.clear();
+    _irParaOFinal(); // Rola para baixo
+
+    try {
+      final url = Uri.parse('https://mobile-ios-ia.zani0x03.eti.br/api/ai/chat');
+      
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.token}',
+        },
+        body: jsonEncode({
+          'prompt': texto,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final respostaIa = data['response'] ?? response.body; 
+
+        setState(() {
+          _mensagens.add({'remetente': 'ia', 'texto': respostaIa.toString()});
+        });
+      } else {
+        setState(() {
+          _mensagens.add({'remetente': 'ia', 'texto': 'Erro do servidor (Status ${response.statusCode}).'});
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _mensagens.add({'remetente': 'ia', 'texto': 'Erro de conexão: $e'});
+      });
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+      _irParaOFinal(); // Rola para baixo após a resposta da IA
+    }
+  }
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -317,36 +398,84 @@ class ChatPage extends StatelessWidget {
       appBar: AppBar(title: const Text('Suporte de TI')),
       body: Column(
         children: [
+          // Área de Mensagens
           Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.chat_bubble_outline, size: 100, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  const Text('Como podemos ajudar hoje?', style: TextStyle(fontSize: 18)),
-                ],
+            child: _mensagens.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_outline, size: 100, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        const Text('Como podemos ajudar hoje?', style: TextStyle(fontSize: 18)),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController, // Vincula o controlador de scroll
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _mensagens.length,
+                    itemBuilder: (context, index) {
+                      final msg = _mensagens[index];
+                      final bUser = msg['remetente'] == 'user';
+                      
+                      return Align(
+                        alignment: bUser ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: bUser ? Colors.blue[700] : Colors.grey[800],
+                            borderRadius: BorderRadius.circular(12).copyWith(
+                              bottomRight: bUser ? const Radius.circular(0) : const Radius.circular(12),
+                              bottomLeft: bUser ? const Radius.circular(12) : const Radius.circular(0),
+                            ),
+                          ),
+                          child: Text(
+                            msg['texto'] ?? '',
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          
+          // Indicador de digitação/carregamento da IA
+          if (_enviando)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Digite sua mensagem...',
-                      border: OutlineInputBorder(),
+
+          // Campo de Entrada de Texto protegido contra sobreposição do sistema
+          SafeArea(
+            top: false, // Só protege a parte de baixo da tela
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _msgController,
+                      onSubmitted: (_) => _enviarMensagem(),
+                      decoration: const InputDecoration(
+                        hintText: 'Digite sua mensagem...',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.send, color: Colors.blue),
-                )
-              ],
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _enviarMensagem,
+                    icon: const Icon(Icons.send, color: Colors.blue),
+                  )
+                ],
+              ),
             ),
           ),
         ],
